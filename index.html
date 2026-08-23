@@ -1477,7 +1477,9 @@ Current Round
 id="dispRound"
 class="dash-val"
 style="color:var(--primary);">
+
 1
+
 </div>
 
 </div>
@@ -1494,7 +1496,9 @@ Total Demand vs Capacity
 <div
 id="dispDemand"
 class="dash-val">
+
 0 / 50 e
+
 </div>
 
 </div>
@@ -1509,7 +1513,9 @@ Active System Fees
 <div
 id="dispFees"
 class="dash-val">
+
 $0 / rd
+
 </div>
 
 </div>
@@ -1744,9 +1750,8 @@ hidden from players during gameplay.
 color:var(--text-muted);
 font-size:0.9rem;">
 
-Choose whether a player receives a system fine when
-their purchase causes neighborhood demand to exceed
-the grid's available capacity.
+Choose the policy that will govern neighborhood
+electricity use during gameplay.
 
 </p>
 
@@ -1766,6 +1771,10 @@ No Policies
 value="systemFines"
 selected>
 System Fines for Exceeding Capacity
+</option>
+
+<option value="flexibleBilling">
+Flexible Billing Rates
 </option>
 
 </select>
@@ -1813,6 +1822,7 @@ System Status:
 
 </span>
 
+
 <span id="turnTrackingText">
 Loading data...
 </span>
@@ -1857,8 +1867,10 @@ id="actionHistoryLog"
 class="log-box">
 
 <div class="log-item">
+
 [SYSTEM] System active.
 Grid parameters established.
+
 </div>
 
 </div>
@@ -1962,13 +1974,17 @@ aria-modal="true">
 <div
 id="modalIcon"
 class="modal-icon">
+
 ⚡
+
 </div>
 
 <div
 id="modalTitle"
 class="modal-title">
+
 System Message
+
 </div>
 
 </div>
@@ -1977,12 +1993,14 @@ System Message
 <div
 id="modalBody"
 class="modal-body">
+
 </div>
 
 
 <div
 id="modalFooter"
 class="modal-footer">
+
 </div>
 
 </div>
@@ -2065,6 +2083,10 @@ let state = {
     upgradeRequired:false,
 
     gamePolicy:"systemFines",
+
+    electricityRate:20,
+
+    highDemandActive:false,
 
     landfill:[],
 
@@ -2362,16 +2384,114 @@ async function showConfirmation(
 
 
 /* ============================================================
+   FLEXIBLE BILLING HELPERS
+   ============================================================ */
+
+function resetFlexibleBillingRate(reason = "") {
+
+    if(
+        state.gamePolicy !==
+        "flexibleBilling"
+    ) {
+
+        return;
+
+    }
+
+
+    const wasHighDemand =
+        state.highDemandActive ||
+        state.electricityRate !== 20;
+
+
+    state.electricityRate = 20;
+
+    state.highDemandActive = false;
+
+
+    if(wasHighDemand) {
+
+        appendLog(
+            `💡 Flexible Billing rate reset to the normal $20/e` +
+            `${reason ? ` ${reason}` : ""}.`
+        );
+
+    }
+
+}
+
+
+function evaluateFlexibleBilling(
+    currentLoad,
+    allowHighDemandTrigger = true
+) {
+
+    if(
+        state.gamePolicy !==
+        "flexibleBilling"
+    ) {
+
+        state.electricityRate = 20;
+
+        state.highDemandActive = false;
+
+        return;
+
+    }
+
+
+    if(!allowHighDemandTrigger) {
+
+        return;
+
+    }
+
+
+    const highDemandThreshold =
+        state.capacity - 10;
+
+
+    if(
+        currentLoad >=
+        highDemandThreshold
+    ) {
+
+        if(!state.highDemandActive) {
+
+            state.highDemandActive = true;
+
+            state.electricityRate = 30;
+
+
+            appendLog(
+                `⚠️ Flexible Billing high-demand pricing activated. ` +
+                `Neighborhood demand reached ${currentLoad}e, ` +
+                `within 10e of the ${state.capacity}e grid capacity. ` +
+                `Utility electricity rate is now $30/e.`
+            );
+
+        }
+
+    }
+
+}
+
+
+/* ============================================================
    HOUSE / CARD HELPERS
    ============================================================ */
 
 function getPlayerGoodsCount(player) {
+
     return player.goodsCards.length;
+
 }
 
 
 function getPlayerSolarCount(player) {
+
     return player.solarPanels.length;
+
 }
 
 
@@ -2408,7 +2528,9 @@ function returnCardToBoard(
 ) {
 
     if(!discarded) {
+
         return;
+
     }
 
 
@@ -2426,7 +2548,9 @@ function returnCardToBoard(
 
 
     if(boardCard) {
+
         boardCard.quantity += 1;
+
     }
 
 }
@@ -2439,7 +2563,9 @@ function discardHouseCard(
 ) {
 
     if(!p) {
+
         return null;
+
     }
 
 
@@ -2453,7 +2579,9 @@ function discardHouseCard(
         cardIndex < 0 ||
         cardIndex >= collection.length
     ) {
+
         return null;
+
     }
 
 
@@ -2465,7 +2593,9 @@ function discardHouseCard(
 
 
     if(!discarded) {
+
         return null;
+
     }
 
 
@@ -2540,7 +2670,9 @@ async function chooseHouseCardToDiscard(
 
 
     if(collection.length === 0) {
+
         return -1;
+
     }
 
 
@@ -2664,7 +2796,9 @@ async function promptFinishRound(pIdx) {
         !p ||
         p.finishedThisRound
     ) {
+
         return;
+
     }
 
 
@@ -2727,7 +2861,9 @@ async function promptFinishRound(pIdx) {
 
 
     if(finishChoice) {
+
         finishPlayerRound(pIdx);
+
     }
 
 }
@@ -2743,8 +2879,24 @@ async function promptRoundSettlement() {
         !allPlayersFinished() ||
         state.upgradeRequired
     ) {
+
         return;
+
     }
+
+
+    const rateNotice =
+        state.gamePolicy === "flexibleBilling"
+            ? `
+
+                <li>
+                    Apply the current electricity billing rate
+                    of <strong>$${state.electricityRate}/electron</strong>
+                    to utility bills.
+                </li>
+
+              `
+            : "";
 
 
     const settlementChoice =
@@ -2794,6 +2946,8 @@ async function promptRoundSettlement() {
                         <li>
                             Process utility bills.
                         </li>
+
+                        ${rateNotice}
 
                         <li>
                             Process surplus electricity income.
@@ -2915,7 +3069,9 @@ function generateBrownoutCapacityInputs() {
 
 
     if(isNaN(number)) {
+
         number = 4;
+
     }
 
 
@@ -3097,7 +3253,9 @@ async function registerNeighbor() {
 function findNextUnfinishedPlayer(startIndex) {
 
     if(players.length === 0) {
+
         return -1;
+
     }
 
 
@@ -3118,7 +3276,9 @@ function findNextUnfinishedPlayer(startIndex) {
         if(
             !players[idx].finishedThisRound
         ) {
+
             return idx;
+
         }
 
     }
@@ -3136,7 +3296,9 @@ function findNextUnfinishedPlayer(startIndex) {
 function allPlayersFinished() {
 
     if(players.length === 0) {
+
         return false;
+
     }
 
 
@@ -3158,7 +3320,9 @@ function finishPlayerRound(pIdx) {
 
 
     if(!p || p.finishedThisRound) {
+
         return;
+
     }
 
 
@@ -3211,7 +3375,9 @@ function finishPlayerRound(pIdx) {
 
 
     if(allPlayersFinished()) {
+
         promptRoundSettlement();
+
     }
 
 }
@@ -3390,7 +3556,9 @@ async function commenceGridSimulation() {
 
 
     if(!establishGridParameters()) {
+
         return;
+
     }
 
 
@@ -3398,6 +3566,11 @@ async function commenceGridSimulation() {
         document.getElementById(
             "gamePolicyInput"
         ).value;
+
+
+    state.electricityRate = 20;
+
+    state.highDemandActive = false;
 
 
     players.forEach(
@@ -3469,6 +3642,19 @@ async function commenceGridSimulation() {
 
     }
 
+    else if(
+        state.gamePolicy ===
+        "flexibleBilling"
+    ) {
+
+        appendLog(
+            "Game Policy: Flexible Billing Rates. " +
+            "Utility electricity costs $20/e normally and rises to $30/e " +
+            "when neighborhood demand comes within 10e of grid capacity."
+        );
+
+    }
+
     else {
 
         appendLog(
@@ -3507,7 +3693,9 @@ async function commenceGridSimulation() {
    DEMAND
    ============================================================ */
 
-function evaluateSystemDemand() {
+function evaluateSystemDemand(
+    allowHighDemandTrigger = true
+) {
 
     let currentLoad = 0;
 
@@ -3556,6 +3744,12 @@ function evaluateSystemDemand() {
     }
 
 
+    evaluateFlexibleBilling(
+        currentLoad,
+        allowHighDemandTrigger
+    );
+
+
     return currentLoad;
 
 }
@@ -3571,8 +3765,11 @@ function getSolarPanelEligiblePlayers() {
         .map((p,index)=>{
 
             return {
+
                 playerIndex:index,
+
                 cash:p.cash
+
             };
 
         })
@@ -3594,7 +3791,9 @@ async function startSolarPanelOnlyTurns() {
 
 
     if(eligiblePlayers.length === 0) {
+
         return;
+
     }
 
 
@@ -3618,6 +3817,7 @@ async function startSolarPanelOnlyTurns() {
 
 
     state.solarPanelCompletedPlayers = [];
+
 
     state.solarPanelTurnIndex = 0;
 
@@ -3720,7 +3920,9 @@ async function startSolarPanelOnlyTurns() {
 async function advanceSolarPanelTurn() {
 
     if(!state.solarPanelSpecialTurn) {
+
         return;
+
     }
 
 
@@ -3827,7 +4029,9 @@ async function advanceSolarPanelTurn() {
 
 
         if(startingPoint === -1) {
+
             startingPoint = 0;
+
         }
 
 
@@ -3837,7 +4041,7 @@ async function advanceSolarPanelTurn() {
             );
 
 
-        evaluateSystemDemand();
+        evaluateSystemDemand(false);
 
         updateUserInterface();
 
@@ -3863,7 +4067,9 @@ async function advanceSolarPanelTurn() {
 
 
     if(state.upgradeRequired) {
+
         await applyGridUpgrade();
+
     }
 
 
@@ -3883,7 +4089,9 @@ async function noPurchase(pIdx) {
         if(
             pIdx !== state.activePlayerIdx
         ) {
+
             return;
+
         }
 
 
@@ -3892,7 +4100,9 @@ async function noPurchase(pIdx) {
 
 
         if(!p) {
+
             return;
+
         }
 
 
@@ -3926,7 +4136,9 @@ async function noPurchase(pIdx) {
 
 
     if(!p || p.finishedThisRound) {
+
         return;
+
     }
 
 
@@ -3953,9 +4165,13 @@ function collectPayment(
     if(amount <= 0) {
 
         return {
+
             cashPaid:0,
+
             happinessUsed:0,
+
             totalValue:0
+
         };
 
     }
@@ -4107,61 +4323,118 @@ async function showBrownoutEvent(
 
         `
 
-        : `
+        : state.gamePolicy === "flexibleBilling"
 
-        <div class="modal-financial-grid">
+            ? `
 
-            <div class="modal-financial-item">
+            <div class="modal-financial-grid">
 
-                <div class="modal-financial-label">
-                    System Fine
+                <div class="modal-financial-item">
+
+                    <div class="modal-financial-label">
+                        System Fine
+                    </div>
+
+                    <div class="modal-financial-value"
+                         style="color:var(--success);">
+
+                        None
+
+                    </div>
+
                 </div>
 
-                <div class="modal-financial-value"
-                     style="color:var(--success);">
 
-                    None
+                <div class="modal-financial-item">
+
+                    <div class="modal-financial-label">
+                        Active Policy
+                    </div>
+
+                    <div class="modal-financial-value">
+
+                        Flexible Billing
+
+                    </div>
 
                 </div>
 
             </div>
 
 
-            <div class="modal-financial-item">
+            <div style="
+                margin-top:15px;
+                color:var(--text-muted);
+                font-size:0.85rem;">
 
-                <div class="modal-financial-label">
-                    Active Policy
+                Flexible Billing does not impose an
+                over-capacity system fine.
+
+                <br><br>
+
+                The brownout still occurs and grid-capacity
+                expansion rules and associated grid fees
+                still apply.
+
+            </div>
+
+            `
+
+            : `
+
+            <div class="modal-financial-grid">
+
+                <div class="modal-financial-item">
+
+                    <div class="modal-financial-label">
+                        System Fine
+                    </div>
+
+                    <div class="modal-financial-value"
+                         style="color:var(--success);">
+
+                        None
+
+                    </div>
+
                 </div>
 
-                <div class="modal-financial-value">
 
-                    No Policies
+                <div class="modal-financial-item">
+
+                    <div class="modal-financial-label">
+                        Active Policy
+                    </div>
+
+                    <div class="modal-financial-value">
+
+                        No Policies
+
+                    </div>
 
                 </div>
 
             </div>
 
-        </div>
 
+            <div style="
+                margin-top:15px;
+                color:var(--text-muted);
+                font-size:0.85rem;">
 
-        <div style="
-            margin-top:15px;
-            color:var(--text-muted);
-            font-size:0.85rem;">
+                The <strong>No Policies</strong> setting means
+                the player receives no financial penalty for
+                causing demand to exceed grid capacity.
 
-            The <strong>No Policies</strong> setting means
-            the player receives no financial penalty for
-            causing demand to exceed grid capacity.
+                <br><br>
 
-            <br><br>
+                The brownout still occurs, and any required
+                <strong>grid capacity expansion and associated
+                grid fees still apply</strong>.
 
-            The brownout still occurs, and any required
-            <strong>grid capacity expansion and associated
-            grid fees still apply</strong>.
+            </div>
 
-        </div>
-
-        `;
+            `;
 
 
     await showMessage(
@@ -4232,7 +4505,9 @@ async function buyCard(
         !p ||
         pIdx !== state.activePlayerIdx
     ) {
+
         return;
+
     }
 
 
@@ -4240,7 +4515,9 @@ async function buyCard(
         !state.solarPanelSpecialTurn &&
         p.finishedThisRound
     ) {
+
         return;
+
     }
 
 
@@ -4248,7 +4525,9 @@ async function buyCard(
         state.solarPanelSpecialTurn &&
         cardType !== "blue"
     ) {
+
         return;
+
     }
 
 
@@ -4256,7 +4535,9 @@ async function buyCard(
         state.solarPanelSpecialTurn &&
         !state.solarPanelEligiblePlayers.includes(pIdx)
     ) {
+
         return;
+
     }
 
 
@@ -4264,7 +4545,9 @@ async function buyCard(
         state.solarPanelSpecialTurn &&
         state.solarPanelCompletedPlayers.includes(pIdx)
     ) {
+
         return;
+
     }
 
 
@@ -4382,7 +4665,9 @@ async function buyCard(
             selectedDiscardIndex === -1 ||
             selectedDiscardIndex === undefined
         ) {
+
             return;
+
         }
 
     }
@@ -4553,7 +4838,9 @@ async function buyCard(
             state.solarPanelCompletedPlayers.includes(pIdx)
         )
     ) {
+
         return;
+
     }
 
 
@@ -4700,8 +4987,9 @@ async function buyCard(
             else {
 
                 appendLog(
-                    `📜 No Policies active: ${p.name} received no system fine ` +
-                    `for exceeding grid capacity by ${excess}e.`
+                    `📜 ${p.name} received no system fine ` +
+                    `for exceeding grid capacity by ${excess}e ` +
+                    `under the active game policy.`
                 );
 
             }
@@ -4795,12 +5083,39 @@ async function buyCard(
         );
 
 
-        if(state.solarPanelSpecialTurn) {
-            state.solarPanelPurchasedDuringOpportunity = true;
+        /*
+         * Flexible Billing:
+         * A Solar Panel purchase resets the electricity rate
+         * to the normal $20/e. The demand calculation is then
+         * refreshed without immediately retriggering high-demand
+         * pricing from this same Solar Panel transaction.
+         */
+
+        if(
+            state.gamePolicy ===
+            "flexibleBilling"
+        ) {
+
+            resetFlexibleBillingRate(
+                "after Solar Panel generation reduced neighborhood demand"
+            );
+
+            evaluateSystemDemand(false);
+
+        }
+
+        else {
+
+            evaluateSystemDemand();
+
         }
 
 
-        evaluateSystemDemand();
+        if(state.solarPanelSpecialTurn) {
+
+            state.solarPanelPurchasedDuringOpportunity = true;
+
+        }
 
     }
 
@@ -4891,8 +5206,10 @@ function updateBrownoutBoxes() {
 
 
         if(box) {
+
             box.className =
                 "bo-box active";
+
         }
 
     }
@@ -5129,7 +5446,9 @@ async function applyGridUpgrade() {
 
 
     if(choice !== "upgrade") {
+
         return;
+
     }
 
 
@@ -5142,6 +5461,25 @@ async function applyGridUpgrade() {
 
 
     state.upgradeRequired = false;
+
+
+    /*
+     * Flexible Billing:
+     * A completed capacity expansion resets the utility rate
+     * to the normal $20/e. The new capacity is displayed without
+     * immediately retriggering high-demand pricing.
+     */
+
+    if(
+        state.gamePolicy ===
+        "flexibleBilling"
+    ) {
+
+        resetFlexibleBillingRate(
+            "after the grid capacity expansion"
+        );
+
+    }
 
 
     appendLog(
@@ -5162,7 +5500,9 @@ async function applyGridUpgrade() {
 
 
     if(startingPoint === -1) {
+
         startingPoint = 0;
+
     }
 
 
@@ -5172,7 +5512,21 @@ async function applyGridUpgrade() {
         );
 
 
-    evaluateSystemDemand();
+    if(
+        state.gamePolicy ===
+        "flexibleBilling"
+    ) {
+
+        evaluateSystemDemand(false);
+
+    }
+
+    else {
+
+        evaluateSystemDemand();
+
+    }
+
 
     updateUserInterface();
 
@@ -5271,19 +5625,30 @@ async function executeRoundEndPayments() {
         const payDay = 500;
 
 
-        const baseBill =
-            p.netE * 20;
+        /*
+         * Flexible Billing only changes the price charged
+         * for electricity consumption.
+         *
+         * Surplus electricity income remains at the game's
+         * existing $20 per electron.
+         */
+
+        const utilityRate =
+            state.gamePolicy === "flexibleBilling"
+                ? state.electricityRate
+                : 20;
 
 
         const utilityBill =
-            baseBill < 0
-                ? Math.abs(baseBill)
+            p.netE < 0
+                ? Math.abs(p.netE) *
+                  utilityRate
                 : 0;
 
 
         const surplusPayment =
-            baseBill > 0
-                ? baseBill
+            p.netE > 0
+                ? p.netE * 20
                 : 0;
 
 
@@ -5345,6 +5710,8 @@ async function executeRoundEndPayments() {
 
             utilityBill,
 
+            utilityRate,
+
             utilityHappiness:
                 utilityPayment.happinessUsed,
 
@@ -5378,6 +5745,21 @@ async function executeRoundEndPayments() {
 
             Each player's current Happiness Index has also
             been added to their Accumulated Happiness.
+
+            ${
+                state.gamePolicy === "flexibleBilling"
+                    ? `
+
+                    <br><br>
+
+                    <strong>
+                        Current Utility Rate:
+                        $${state.electricityRate}/electron
+                    </strong>
+
+                    `
+                    : ""
+            }
 
         </div>
 
@@ -5438,6 +5820,30 @@ async function executeRoundEndPayments() {
 
                         `
                         : ""
+                    }
+
+
+                    ${
+                        state.gamePolicy === "flexibleBilling"
+                            ? `
+
+                            <span>
+                                Utility Rate:
+                            </span>
+
+                            <strong style="
+                                color:${
+                                    event.utilityRate === 30
+                                        ? "var(--warning)"
+                                        : "var(--text-main)"
+                                };">
+
+                                $${event.utilityRate}/e
+
+                            </strong>
+
+                            `
+                            : ""
                     }
 
 
@@ -6192,6 +6598,33 @@ function updateUserInterface() {
         }
 
 
+        const flexibleBillingSummary =
+            state.gamePolicy === "flexibleBilling"
+                ? `
+
+                <div class="payment-row">
+
+                    <span>
+                        Electricity Rate
+                    </span>
+
+                    <strong style="
+                        color:${
+                            state.electricityRate === 30
+                                ? "var(--warning)"
+                                : "var(--success)"
+                        };">
+
+                        $${state.electricityRate} / e
+
+                    </strong>
+
+                </div>
+
+                `
+                : "";
+
+
         card.innerHTML = `
 
             <div class="player-header">
@@ -6229,6 +6662,9 @@ function updateUserInterface() {
                     </strong>
 
                 </div>
+
+
+                ${flexibleBillingSummary}
 
 
                 <div class="payment-row">
